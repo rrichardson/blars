@@ -1,0 +1,12 @@
+[package]
+
+name = "blars"
+version = "0.0.1"
+authors = ["Rick Richardson <rick.richardson@gmail.com>"]
+
+[dependencies]
+rand = "*"
+
+[dependencies.xxhash]
+
+git = "https://github.com/rrichardson/rust-xxhash"
