@@ -2,13 +2,14 @@ use std::vec::Vec;
 use std::iter::AdditiveIterator;
 use std::iter::repeat;
 use std::num::Float;
+use std::collections::hash_map::{HashMap, Entry};
 use xxhash::hash;
 use rand::{thread_rng, ThreadRng, Rng};
 use rand::distributions::normal::StandardNormal;
-use unicode::char::from_u32;
+use std::string::{String};
 
-/// the maximum number of bits allowable in a unicode char
-static MAX_WIDTH : usize = 20;
+/// the maximum number of bits allowable in a utf16 char
+static MAX_WIDTH : usize = 16;
 
 ///
 /// Calculates simple moving average for an array of ints
@@ -65,18 +66,16 @@ pub fn feature_hash_string(s : &str, window: usize, width: usize) -> Vec<f64> {
 /// the result of the dot product of the provided feature hash
 /// with the random projection vectors
 ///
-pub fn locality_hash_vector(v : Vec<f64>, width : usize, proj_vecs: Vec<Vec<f64>>) -> char {
+pub fn locality_hash_vector(v : Vec<f64>, width : usize, proj_vecs: Vec<Vec<f64>>) -> u16 {
     if width > MAX_WIDTH { panic!("width cannot exceed {}", MAX_WIDTH); }
 
-    let mut r = 0u32;
+    let mut r = 0u16;
     for i in (0 .. width) {
         if dot_product(proj_vecs[i].as_slice(), v.as_slice()) > 0.0 {
             r |= 1 << (width - 1 - i)
         }
     }
-
-    //validating the number of bits *should* guarantee that this unwrap is safe
-    from_u32(r).unwrap()
+    r
 }
 
 ///
@@ -90,6 +89,51 @@ pub fn gen_projection_vectors(alphabet_width: usize, feature_width: usize) -> Ve
     }).collect()
 }
 
+pub fn generate_codon(genome: &Vec<u16>, width: usize) -> (Vec<String>, HashMap<String, usize>) {
+    let num_keys = genome.len() - width + 1;
+    let mut counts = HashMap::<String, usize>::with_capacity(num_keys);
+    let mut codons = Vec::<String>::with_capacity(num_keys);
+
+    for _ in (0 .. num_keys) {
+        let key = String::from_utf16_lossy(genome.iter().take(width).cloned().collect::<Vec<u16>>().as_slice());
+        match counts.entry(key.clone()) {
+            Entry::Vacant(view) => {
+                view.insert(1);
+            },
+            Entry::Occupied(mut view) => {
+                let v = view.get_mut();
+                *v += 1;
+            }
+        }
+        codons.push(key);
+    }
+    (codons, counts)
+}
+
+pub fn score_codon(counts: &HashMap<String, usize>,
+                   codon_width: usize,
+                   genome_length: usize,
+                   normalize: bool) -> HashMap<String, f64> {
+
+    let mut scores = HashMap::<String, f64>::with_capacity(counts.len());
+    let mut result = HashMap::<String, f64>::with_capacity(counts.len());
+    let mut min = 1000000.0;
+    let mut max = -1000000.0;
+
+    counts.iter().inspect(| &(k, v)| {
+        let score = -(*v as f64 / (genome_length - codon_width + 1) as f64).log2();
+        scores.insert((*k).clone(), score);
+        if min > score { min = score; }
+        if max < score { max = score; }
+    }).count();
+
+    if normalize {
+        scores.iter().inspect(| &(k,v)| { result.insert((*k).clone(), (*v - min) / max); }).count();
+    } else {
+        scores.iter().inspect(| &(k,v)| { result.insert((*k).clone(), *v - min); } ).count();
+    }
+    result
+}
 
 #[test]
 fn it_works() {
