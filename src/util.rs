@@ -13,7 +13,7 @@ static MAX_WIDTH : usize = 16;
 
 ///
 /// Calculates simple moving average for an array of ints
-/// beginning at 1 item up to make window
+/// beginning at 1 item up to window size
 ///
 pub fn moving_average(vals: &[usize], window: usize, ) -> Vec<f64> {
     let mut result = Vec::with_capacity(vals.len());
@@ -66,7 +66,7 @@ pub fn feature_hash_string(s : &str, window: usize, width: usize) -> Vec<f64> {
 /// the result of the dot product of the provided feature hash
 /// with the random projection vectors
 ///
-pub fn locality_hash_vector(v : Vec<f64>, width : usize, proj_vecs: Vec<Vec<f64>>) -> u16 {
+pub fn locality_hash_vector(v : Vec<f64>, width : usize, proj_vecs: &Vec<Vec<f64>>) -> u16 {
     if width > MAX_WIDTH { panic!("width cannot exceed {}", MAX_WIDTH); }
 
     let mut r = 0u16;
@@ -82,7 +82,7 @@ pub fn locality_hash_vector(v : Vec<f64>, width : usize, proj_vecs: Vec<Vec<f64>
 /// Create a vector of vector normals in a random distribution
 /// This function mallocs a lot, but it should only be run at initialization time
 ///
-pub fn gen_projection_vectors(alphabet_width: usize, feature_width: usize) -> Vec<Vec<f64>> {
+pub fn generate_projection_vectors(alphabet_width: usize, feature_width: usize) -> Vec<Vec<f64>> {
     (0 .. alphabet_width).map(|_| {
         let v : Vec<f64> = (0 .. feature_width).map(|_| thread_rng().gen::<StandardNormal>().0 ).collect();
         normalize(v.as_slice())
@@ -94,8 +94,8 @@ pub fn generate_codon(genome: &Vec<u16>, width: usize) -> (Vec<String>, HashMap<
     let mut counts = HashMap::<String, usize>::with_capacity(num_keys);
     let mut codons = Vec::<String>::with_capacity(num_keys);
 
-    for _ in (0 .. num_keys) {
-        let key = String::from_utf16_lossy(genome.iter().take(width).cloned().collect::<Vec<u16>>().as_slice());
+    for i in (0 .. num_keys) {
+        let key = String::from_utf16_lossy(genome.iter().skip(i).take(width).cloned().collect::<Vec<u16>>().as_slice());
         match counts.entry(key.clone()) {
             Entry::Vacant(view) => {
                 view.insert(1);

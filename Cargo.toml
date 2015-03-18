@@ -1,8 +1,15 @@
 [package]
-
 name = "blars"
 version = "0.0.1"
 authors = ["Rick Richardson <rick.richardson@gmail.com>"]
+
+[[bin]]
+name="blars_file"
+path="src/bin/file.rs"
+
+[[lib]]
+name = "blars"
+
 
 [dependencies]
 rand = "*"

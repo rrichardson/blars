@@ -5,4 +5,4 @@ extern crate xxhash;
 extern crate rand;
 extern crate unicode;
 
-mod util;
+pub mod util;
