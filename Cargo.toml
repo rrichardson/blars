@@ -7,7 +7,7 @@ authors = ["Rick Richardson <rick.richardson@gmail.com>"]
 name="blars_file"
 path="src/bin/file.rs"
 
-[[lib]]
+[lib]
 name = "blars"
 
 
@@ -17,3 +17,6 @@ rand = "*"
 [dependencies.xxhash]
 
 git = "https://github.com/rrichardson/rust-xxhash"
+
+[dependencies.streaming-stats]
+git = "git://github.com/BurntSushi/rust-stats"

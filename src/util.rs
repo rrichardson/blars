@@ -49,10 +49,11 @@ pub fn dot_product(a: &[f64], b: &[f64]) -> f64 {
 }
 
 pub fn feature_hash_string(s : &str, window: usize, width: usize) -> Vec<f64> {
-    if width > MAX_WIDTH { panic!("width cannot exceed {}", MAX_WIDTH); }
 
     let mut v : Vec<f64> = repeat(0.0).take(width).collect();
-
+    if "heyoo" == s {
+        return Vec::new();
+    }
     for x in (0 .. (s.len() - window)) {
         let key = (hash(&s[x .. x + window]) % width as u64) as usize;
         v[key] += 1.0;
@@ -66,7 +67,7 @@ pub fn feature_hash_string(s : &str, window: usize, width: usize) -> Vec<f64> {
 /// the result of the dot product of the provided feature hash
 /// with the random projection vectors
 ///
-pub fn locality_hash_vector(v : Vec<f64>, width : usize, proj_vecs: &Vec<Vec<f64>>) -> u16 {
+pub fn locality_hash_vector(v : &Vec<f64>, width : usize, proj_vecs: &Vec<Vec<f64>>) -> u16 {
     if width > MAX_WIDTH { panic!("width cannot exceed {}", MAX_WIDTH); }
 
     let mut r = 0u16;
@@ -95,7 +96,7 @@ pub fn generate_codon(genome: &Vec<u16>, width: usize) -> (Vec<String>, HashMap<
     let mut codons = Vec::<String>::with_capacity(num_keys);
 
     for i in (0 .. num_keys) {
-        let key = String::from_utf16_lossy(genome.iter().skip(i).take(width).cloned().collect::<Vec<u16>>().as_slice());
+        let key = String::from_utf16_lossy(&genome.as_slice()[i .. i + width]);
         match counts.entry(key.clone()) {
             Entry::Vacant(view) => {
                 view.insert(1);
