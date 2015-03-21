@@ -48,18 +48,16 @@ pub fn dot_product(a: &[f64], b: &[f64]) -> f64 {
     a.iter().zip(b.iter()).fold(0.0, |x, (a, b)| x + (a * b))
 }
 
-pub fn feature_hash_string(s : &str, window: usize, width: usize) -> Vec<f64> {
+pub fn feature_hash_string(s : &str, window: usize, width: usize) -> Option<Vec<f64>> {
 
     let mut v : Vec<f64> = repeat(0.0).take(width).collect();
-    if "heyoo" == s {
-        return Vec::new();
-    }
+    if window > s.len() { return None; }
     for x in (0 .. (s.len() - window)) {
         let key = (hash(&s[x .. x + window]) % width as u64) as usize;
         v[key] += 1.0;
     }
 
-    v
+    Some(v)
 }
 
 ///
@@ -67,16 +65,20 @@ pub fn feature_hash_string(s : &str, window: usize, width: usize) -> Vec<f64> {
 /// the result of the dot product of the provided feature hash
 /// with the random projection vectors
 ///
-pub fn locality_hash_vector(v : &Vec<f64>, width : usize, proj_vecs: &Vec<Vec<f64>>) -> u16 {
+pub fn locality_hash_vector(invec : &Option<Vec<f64>>, width : usize, proj_vecs: &Vec<Vec<f64>>) -> u16 {
     if width > MAX_WIDTH { panic!("width cannot exceed {}", MAX_WIDTH); }
 
     let mut r = 0u16;
-    for i in (0 .. width) {
-        if dot_product(proj_vecs[i].as_slice(), v.as_slice()) > 0.0 {
-            r |= 1 << (width - 1 - i)
+    if let Some(ref v) = *invec {
+        for i in (0 .. width) {
+            if dot_product(proj_vecs[i].as_slice(), v.as_slice()) > 0.0 {
+                r |= 1 << (width - 1 - i)
+            }
         }
+        r
+    } else {
+        0
     }
-    r
 }
 
 ///

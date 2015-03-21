@@ -34,5 +34,5 @@ source = "git+git://github.com/BurntSushi/rust-stats#72728a62ebd8377da36bb078017
 [[package]]
 name = "xxhash"
 version = "0.0.8"
-source = "git+https://github.com/rrichardson/rust-xxhash#fc72fb3e9a8aa7990e1762a2fd0167ee26108c8b"
+source = "git+https://github.com/rrichardson/rust-xxhash#ba5742d396d258e63dc88e0f0db192260ceb4638"
 
