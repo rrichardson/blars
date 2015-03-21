@@ -1,11 +1,12 @@
 extern crate blars;
+extern crate stats;
 
 use std::fs::File;
 use std::io::{BufReader, BufWriter, BufRead, Write, Read};
 use std::env;
 use blars::util::*;
-
-static FEATURE_WIDTH : usize = 16;
+use stats::OnlineStats;
+static FEATURE_WIDTH : usize = 42;
 static ALPHABET_WIDTH : usize = 8;
 static WORD_WIDTH : usize = 4;
 
@@ -14,6 +15,7 @@ fn main() {
     args.next();
     let inpath = Path::new(args.next().unwrap());
     println!("inpath={:?}", inpath);
+    let seed : usize= args.next().unwrap().parse().unwrap();
     let scores = Path::new("scores.log");
     let counts = Path::new("counts.log");
     let projs =  Path::new("projections.log");
@@ -21,16 +23,18 @@ fn main() {
     let mut sfile = BufWriter::new(File::create(&scores).unwrap());
     let mut cfile = BufWriter::new(File::create(&counts).unwrap());
     let mut pfile = BufWriter::new(File::create(&projs).unwrap());
-    let projections = generate_projection_vectors(ALPHABET_WIDTH, FEATURE_WIDTH);
     let mut lines = Vec::<usize>::with_capacity(1_000_000);
     let mut genome = Vec::<u16>::with_capacity(1_000_000);
     let mut buf = String::with_capacity(512);
     let mut i = 0usize;
 
+    let projections = generate_normal_projection(ALPHABET_WIDTH, FEATURE_WIDTH, seed);
+    //let projections = generate_binary_projection(ALPHABET_WIDTH, FEATURE_WIDTH, seed);
+
     println!("Generating genome");
     lines.push(0);
     loop {
-        if i % 100_00 == 0 { println!("line #{}", i); }
+        if i % 100_000 == 0 { println!("line #{}", i); }
         i += 1;
         buf.clear();
         match infile.read_line(&mut buf) {
@@ -51,6 +55,12 @@ fn main() {
     }
     for p in projections.iter() {
         writeln!(&mut pfile, "{:?}", p).unwrap();
+    }
+
+    println!("Projections:");
+    for i in projections.iter() {
+        let s = OnlineStats::from_slice(i.as_slice());
+        println!("stddev={} mean={} variance={}", s.stddev(), s.mean(), s.variance());
     }
 
     println!("Generating codon for genome of size: {}", genome.len());

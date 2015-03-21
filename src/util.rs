@@ -4,13 +4,13 @@ use std::iter::repeat;
 use std::num::Float;
 use std::collections::hash_map::{HashMap, Entry};
 use xxhash::hash;
-use rand::{thread_rng, ThreadRng, Rng};
+use rand::{StdRng, Rng, SeedableRng};
 use rand::distributions::normal::StandardNormal;
 use std::string::{String};
+use std::iter::MinMaxResult::{MinMax};
 
 /// the maximum number of bits allowable in a utf16 char
 static MAX_WIDTH : usize = 16;
-
 ///
 /// Calculates simple moving average for an array of ints
 /// beginning at 1 item up to window size
@@ -50,14 +50,21 @@ pub fn dot_product(a: &[f64], b: &[f64]) -> f64 {
 
 pub fn feature_hash_string(s : &str, window: usize, width: usize) -> Option<Vec<f64>> {
 
-    let mut v : Vec<f64> = repeat(0.0).take(width).collect();
+    let mut v : Vec<u32> = repeat(0).take(width).collect();
     if window > s.len() { return None; }
+
     for x in (0 .. (s.len() - window)) {
         let key = (hash(&s[x .. x + window]) % width as u64) as usize;
-        v[key] += 1.0;
+        v[key] += 1;
     }
-
-    Some(v)
+    //center the vector
+    if let MinMax(mn, mx) = v.iter().min_max() {
+        let cntr = ((*mx - *mn) as f64 / 2.0) + *mn as f64;
+        Some(v.iter().map(|x| *x as f64 - cntr ).collect())
+    }
+    else {
+        None
+    }
 }
 
 ///
@@ -85,10 +92,21 @@ pub fn locality_hash_vector(invec : &Option<Vec<f64>>, width : usize, proj_vecs:
 /// Create a vector of vector normals in a random distribution
 /// This function mallocs a lot, but it should only be run at initialization time
 ///
-pub fn generate_projection_vectors(alphabet_width: usize, feature_width: usize) -> Vec<Vec<f64>> {
+pub fn generate_normal_projection(alphabet_width: usize, feature_width: usize, seed: usize) -> Vec<Vec<f64>> {
+    let sd = [seed];
+    let mut rng = StdRng::from_seed(&sd);
     (0 .. alphabet_width).map(|_| {
-        let v : Vec<f64> = (0 .. feature_width).map(|_| thread_rng().gen::<StandardNormal>().0 ).collect();
+        let v : Vec<f64> = (0 .. feature_width).map(|_| rng.gen::<StandardNormal>().0 ).collect();
         normalize(v.as_slice())
+    }).collect()
+}
+
+pub fn generate_binary_projection(alphabet_width: usize, feature_width: usize, seed: usize) -> Vec<Vec<f64>> {
+    let sd = [seed];
+    let mut rng = StdRng::from_seed(&sd);
+    let choices = [-1.0, 1.0];
+    (0 .. alphabet_width).map(|_| {
+        (0 .. feature_width).map(|_| *rng.choose(&choices).unwrap() ).collect()
     }).collect()
 }
 
