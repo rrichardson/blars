@@ -6,3 +6,4 @@ extern crate rand;
 extern crate unicode;
 
 pub mod util;
+pub mod cmap;

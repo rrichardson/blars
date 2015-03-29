@@ -2,13 +2,22 @@ extern crate blars;
 extern crate stats;
 
 use std::fs::File;
-use std::io::{BufReader, BufWriter, BufRead, Write, Read};
+use std::io::{BufReader, BufWriter, BufRead, Write, Read, Seek, SeekFrom};
 use std::env;
+use std::str::from_utf8_unchecked;
 use blars::util::*;
 use stats::OnlineStats;
-static FEATURE_WIDTH : usize = 42;
-static ALPHABET_WIDTH : usize = 8;
-static WORD_WIDTH : usize = 4;
+use blars::cmap::{ CollisionMap, Entry };
+use std::collections::{BinaryHeap};
+
+
+const FEATURE_WIDTH : usize = 24;
+const ALPHABET_WIDTH : usize = 8;
+const NGRAM_WIDTH : usize = 4;
+const BLOCK_WIDTH : usize = 64;
+
+const COLLISION_BITS : usize = 11;
+const KEY_SIZE : usize = 4;
 
 fn main() {
     let mut args = env::args();
@@ -17,65 +26,60 @@ fn main() {
     println!("inpath={:?}", inpath);
     let seed : usize= args.next().unwrap().parse().unwrap();
     let scores = Path::new("scores.log");
-    let counts = Path::new("counts.log");
-    let projs =  Path::new("projections.log");
-    let mut infile = BufReader::new(File::open(&inpath).unwrap());
+    let mut ifile = File::open(&inpath).unwrap();
+    let filesize = ifile.seek(SeekFrom::End(0)).unwrap();
+    ifile.seek(SeekFrom::Start(0));
+    let mut infile = BufReader::new(ifile);
     let mut sfile = BufWriter::new(File::create(&scores).unwrap());
-    let mut cfile = BufWriter::new(File::create(&counts).unwrap());
-    let mut pfile = BufWriter::new(File::create(&projs).unwrap());
-    let mut lines = Vec::<usize>::with_capacity(1_000_000);
-    let mut genome = Vec::<u16>::with_capacity(1_000_000);
-    let mut buf = String::with_capacity(512);
+    let mut genome = Vec::<u8>::with_capacity(1_000_000);
+    let mut buf : [u8; BLOCK_WIDTH] = [0; BLOCK_WIDTH];
     let mut i = 0usize;
-
     let projections = generate_normal_projection(ALPHABET_WIDTH, FEATURE_WIDTH, seed);
+    let mut map = [CollisionMap::new(COLLISION_BITS, seed),
+        CollisionMap::new(COLLISION_BITS, seed + 1),
+        CollisionMap::new(COLLISION_BITS, seed + 2)];
     //let projections = generate_binary_projection(ALPHABET_WIDTH, FEATURE_WIDTH, seed);
 
     println!("Generating genome");
-    lines.push(0);
     loop {
-        if i % 100_000 == 0 { println!("line #{}", i); }
+        if i % 100_000 == 0 { println!("offset #{} out of {}", i * BLOCK_WIDTH, filesize); }
         i += 1;
-        buf.clear();
-        match infile.read_line(&mut buf) {
+        match infile.read(&mut buf) {
             Ok(0) => { break },
             Ok(sz) => {
-                lines.push(sz);
                 genome.push(
                     locality_hash_vector(
-                        &feature_hash_string(
-                            buf.as_slice(),
-                            WORD_WIDTH,
-                            FEATURE_WIDTH),
+                        &feature_hash_string( &buf, NGRAM_WIDTH, FEATURE_WIDTH),
                         ALPHABET_WIDTH,
                         &projections));
             },
             Err(e) => {println!("Error: {}", e)}
         }
     }
-    for p in projections.iter() {
-        writeln!(&mut pfile, "{:?}", p).unwrap();
+
+    println!("Generating collision map");
+    //TODO need to make KEY_SIZE drive the type of int value created
+    //then it will be fully generic
+    for g in (0 .. genome.len() - KEY_SIZE).step_by(KEY_SIZE) {
+        for i in map.iter_mut() {
+            let val : u32 = slice_to_int(&genome[g .. g + KEY_SIZE]).unwrap();
+            i.insert(val, g as u64)
+        }
     }
 
-    println!("Projections:");
-    for i in projections.iter() {
-        let s = OnlineStats::from_slice(i.as_slice());
-        println!("stddev={} mean={} variance={}", s.stddev(), s.mean(), s.variance());
+    println!("Scoring genome distances");
+    let mut scores = BinaryHeap::<Entry>::with_capacity(1_000_000);
+    for i in map.iter() {
+        i.score(&mut scores);
     }
 
-    println!("Generating codon for genome of size: {}", genome.len());
-    let (codon, counts) = generate_codon(&genome, WORD_WIDTH);
+    let mut ifile = File::open(&inpath).unwrap();
 
-    for (k, v) in counts.iter() {
-        writeln!(&mut cfile, "key: {}, score: {}", k, v).unwrap();
+    for i in scores.iter().take(30) {
+        let mut buf = &mut[0u8; 100];
+        ifile.seek(SeekFrom::Start(i.0-50));
+        ifile.read(buf);
+        let line = unsafe { from_utf8_unchecked(buf) };
+        writeln!(&mut sfile, "score: {} -- offset: {} -- {}\n", i.1, i.0, line);
     }
-
-    println!("scoring codon counts of size: {}", counts.len());
-    let scores = score_codon(&counts, WORD_WIDTH, genome.len(), true);
-
-    for (k, v) in scores.iter() {
-       writeln!(&mut sfile, "key: {}, score: {}", k, v).unwrap();
-    }
-
-
 }

@@ -8,9 +8,9 @@ use rand::{StdRng, Rng, SeedableRng};
 use rand::distributions::normal::StandardNormal;
 use std::string::{String};
 use std::iter::MinMaxResult::{MinMax};
-
+use std::num::Int;
 /// the maximum number of bits allowable in a utf16 char
-static MAX_WIDTH : usize = 16;
+static MAX_WIDTH : usize = 8;
 ///
 /// Calculates simple moving average for an array of ints
 /// beginning at 1 item up to window size
@@ -48,7 +48,7 @@ pub fn dot_product(a: &[f64], b: &[f64]) -> f64 {
     a.iter().zip(b.iter()).fold(0.0, |x, (a, b)| x + (a * b))
 }
 
-pub fn feature_hash_string(s : &str, window: usize, width: usize) -> Option<Vec<f64>> {
+pub fn feature_hash_string(s : &[u8], window: usize, width: usize) -> Option<Vec<f64>> {
 
     let mut v : Vec<u32> = repeat(0).take(width).collect();
     if window > s.len() { return None; }
@@ -68,14 +68,14 @@ pub fn feature_hash_string(s : &str, window: usize, width: usize) -> Option<Vec<
 }
 
 ///
-/// Produce a 16 bit integer whose bits are set by
+/// Produce an 8 bit integer whose bits are set by
 /// the result of the dot product of the provided feature hash
 /// with the random projection vectors
 ///
-pub fn locality_hash_vector(invec : &Option<Vec<f64>>, width : usize, proj_vecs: &Vec<Vec<f64>>) -> u16 {
+pub fn locality_hash_vector(invec : &Option<Vec<f64>>, width : usize, proj_vecs: &Vec<Vec<f64>>) -> u8 {
     if width > MAX_WIDTH { panic!("width cannot exceed {}", MAX_WIDTH); }
 
-    let mut r = 0u16;
+    let mut r = 0u8;
     if let Some(ref v) = *invec {
         for i in (0 .. width) {
             if dot_product(proj_vecs[i].as_slice(), v.as_slice()) > 0.0 {
@@ -110,13 +110,13 @@ pub fn generate_binary_projection(alphabet_width: usize, feature_width: usize, s
     }).collect()
 }
 
-pub fn generate_codon(genome: &Vec<u16>, width: usize) -> (Vec<String>, HashMap<String, usize>) {
+pub fn generate_codon(genome: &Vec<u8>, width: usize) -> (Vec<Vec<u8>>, HashMap<Vec<u8>, usize>) {
     let num_keys = genome.len() - width + 1;
-    let mut counts = HashMap::<String, usize>::with_capacity(num_keys);
-    let mut codons = Vec::<String>::with_capacity(num_keys);
+    let mut counts = HashMap::<Vec<u8>, usize>::with_capacity(num_keys);
+    let mut codons = Vec::<Vec<u8>>::with_capacity(num_keys);
 
     for i in (0 .. num_keys) {
-        let key = String::from_utf16_lossy(&genome.as_slice()[i .. i + width]);
+        let key = genome.as_slice()[i .. i + width].to_vec();
         match counts.entry(key.clone()) {
             Entry::Vacant(view) => {
                 view.insert(1);
@@ -131,13 +131,13 @@ pub fn generate_codon(genome: &Vec<u16>, width: usize) -> (Vec<String>, HashMap<
     (codons, counts)
 }
 
-pub fn score_codon(counts: &HashMap<String, usize>,
+pub fn score_codon(counts: &HashMap<Vec<u8>, usize>,
                    codon_width: usize,
                    genome_length: usize,
-                   normalize: bool) -> HashMap<String, f64> {
+                   normalize: bool) -> HashMap<Vec<u8>, f64> {
 
-    let mut scores = HashMap::<String, f64>::with_capacity(counts.len());
-    let mut result = HashMap::<String, f64>::with_capacity(counts.len());
+    let mut scores = HashMap::<Vec<u8>, f64>::with_capacity(counts.len());
+    let mut result = HashMap::<Vec<u8>, f64>::with_capacity(counts.len());
     let mut min = 1000000.0;
     let mut max = -1000000.0;
 
@@ -154,6 +154,20 @@ pub fn score_codon(counts: &HashMap<String, usize>,
         scores.iter().inspect(| &(k,v)| { result.insert((*k).clone(), *v - min); } ).count();
     }
     result
+}
+
+#[inline]
+pub fn slice_to_int<I : Int>(s : &[u8]) -> Option<I> {
+    use std::raw::Slice;
+    use std::mem;
+    if s.len() < mem::size_of::<I>() { return None }
+
+    let res : I = unsafe {
+        let tmp : Slice<u8> = mem::transmute(s);
+        *(tmp.data as *const I)
+    };
+
+    Some(res)
 }
 
 #[test]
