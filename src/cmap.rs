@@ -3,7 +3,7 @@ use std::vec::Vec;
 use std::collections::{VecDeque, BinaryHeap};
 use std::collections::vec_deque::Iter as DIter;
 use std::slice::Iter as VIter;
-use std::num::{Int, NumCast};
+use num::{PrimInt, NumCast, Num};
 use std::intrinsics::{ctpop8, ctpop16, ctpop32, ctpop64};
 use rand::{StdRng, Rng, SeedableRng};
 use std::mem;
@@ -18,75 +18,79 @@ use std::sync::atomic::Ordering as AOrdering;
 ///
 
 #[derive(Debug)]
-pub struct CollisionMap<I : Int + fmt::Debug> {
-    cells: Vec<VecDeque<(I, u64)>>,
-    mask: I
+pub struct CollisionMap<'a, I>
+where I : PrimInt + 'a,
+      <I as Num>::FromStrRadixErr : 'a
+{
+    cells: Vec< VecDeque<&'a Entry<I>> >,
+    mask: I,
+    len: usize
 }
 
-impl<I> CollisionMap<I> where I : Int + fmt::Debug {
-    pub fn new(num_bits : usize, seed : usize) -> CollisionMap<I>{
+impl<'a, I> CollisionMap<'a, I>
+where I : PrimInt + 'a,
+      <I as Num>::FromStrRadixErr : 'a
+{
+    pub fn new(num_bits : usize, seed : usize) -> CollisionMap<'a, I> {
         let size : usize = 2.pow(num_bits as u32);
         CollisionMap {
             cells: (0 .. size).map(|_| VecDeque::with_capacity(30)).collect(),
-            mask : gen_mask(num_bits, seed).unwrap()
+            mask : gen_mask(num_bits, seed).unwrap(),
+            len : 0
         }
     }
 
-    pub fn insert(&mut self, val: I, id: u64) {
-        self.cells[collapse(val, self.mask)].push_back((val, id))
+    pub fn insert (&mut self, val: &'a Entry<I>) {
+        self.cells[collapse(val.hash, self.mask)].push_back(val);
+        self.len += 1;
     }
 
-    pub fn score(&self, scores: &mut BinaryHeap<Entry>) -> usize {
-
-        let mut ttls : Vec<u32> = (0 .. 1_000_000).map(|_| 0).collect();
+    pub fn score(&self) -> usize {
         let mut count = 0;
-        let mut deq_idx = 0;
+        let mut perc = 0;
+        let tenth = self.len / 10;
+
         for i in self.cells.iter() {
-            let mut slf = 0;
             let sz = i.len();
             if sz < 1 { continue; }
-            for d in i.iter().take(sz -1) {
+            let mut slf = 0;
+
+            for d in i.iter().take(sz - 1) {
                 count += 1;
-                if count % 100_000 == 0 { println!("{} * 4 scored", count); }
-                let mut oth = slf + 1;
-                for e in i.iter().skip(slf+1) {
-                    let dst = distance(d.0, e.0);
-                    ttls[slf] = ttls[slf] + dst;
-                    ttls[oth] = ttls[oth] + dst;
-                    oth += 1
+                if count % tenth == 0 { println!("{}0% done", perc); perc +=1 }
+                for e in i.iter().skip(slf + 1) {
+                    let dst = distance(d.hash, e.hash) as usize;
+                    d.total.fetch_add(dst, AOrdering::SeqCst);
+                    d.count.fetch_add(1, AOrdering::SeqCst);
+                    e.total.fetch_add(dst, AOrdering::SeqCst);
+                    e.count.fetch_add(1, AOrdering::SeqCst);
                 }
-                scores.push(Entry (d.1, ttls[slf] as f64 / sz as f64));
-                ttls[slf] = 0;
                 slf += 1;
             }
-            scores.push(Entry (i.back().unwrap().1, ttls[slf] as f64 / sz as f64));
-            ttls[slf] = 0;
-            deq_idx += 1;
         }
-
         count
     }
 }
 
-#[derive(Debug)]
-pub struct Entry {
+pub struct Entry<I : PrimInt> {
     pub id : u64,
     pub score : f64,
+    pub hash : I,
     pub total : AtomicUsize,
     pub count : AtomicUsize
 }
 
-impl PartialEq for Entry {
-    fn eq(&self,  other: &Entry) -> bool {
+impl<I> PartialEq for Entry<I> where I : PrimInt {
+    fn eq(&self,  other: &Entry<I>) -> bool {
         self.score == other.score
     }
 }
 
-impl Eq for Entry {
+impl<I> Eq for Entry<I> where I : PrimInt {
 }
 
-impl PartialOrd for Entry {
-    fn partial_cmp(&self, other: &Entry) -> Option<COrdering> {
+impl<I> PartialOrd for Entry<I> where I : PrimInt {
+    fn partial_cmp(&self, other: &Entry<I>) -> Option<COrdering> {
         if self.score > other.score {
             Some(COrdering::Greater)
         } else if self.score < other.score {
@@ -97,8 +101,8 @@ impl PartialOrd for Entry {
     }
 }
 
-impl Ord for Entry {
-    fn cmp(&self, other: &Entry) -> COrdering {
+impl<I> Ord for Entry<I> where I : PrimInt {
+    fn cmp(&self, other: &Entry<I>) -> COrdering {
         self.partial_cmp(other).unwrap()
     }
 }
@@ -106,14 +110,14 @@ impl Ord for Entry {
 
 // this is a really dumb generator with no actual upper bound on execution
 // time, but it'll probably end up being faster than a sampling algo
-fn gen_mask<I : Int>(num_bits : usize, seed : usize) -> Option<I> {
+fn gen_mask<I : PrimInt>(num_bits : usize, seed : usize) -> Option<I> {
     let mut rng = StdRng::from_seed(&[seed]);
     if (num_bits / 8) > mem::size_of::<I>() {
         return None;
     }
 
     loop {
-        let item : I = NumCast::from(rng.next_u64() & (I::max_value().to_u64().unwrap()) ).unwrap();
+        let item : I = NumCast::from(rng.next_u64() & (I::max_value().to_u64().unwrap())).unwrap();
         if item.count_ones() == num_bits as u32 {
             return Some(item)
         }
@@ -125,7 +129,7 @@ fn gen_mask<I : Int>(num_bits : usize, seed : usize) -> Option<I> {
 
 // a perfect hash algo of sorts to place the value
 #[inline]
-fn collapse<I : Int>(num: I, mask: I) -> usize {
+fn collapse<I : PrimInt>(num: I, mask: I) -> usize {
     let num_bits = mem::size_of::<I>() * 8;
     let mut result = 0;
     let mut i : usize = 0;
@@ -144,11 +148,20 @@ fn collapse<I : Int>(num: I, mask: I) -> usize {
 }
 
 #[inline]
-fn distance<I : Int>(a : I, b : I) -> u32 {
+fn distance<I : PrimInt>(a : I, b : I) -> u32 {
     (a ^ b).count_ones()
 }
+
+impl<I> fmt::Debug for Entry<I> where I : PrimInt {
+    fn fmt(&self, f : &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        writeln!(f, "Entry{{ id: {}, score: {}, hash: {:b}, total: {}, count: {} }}",
+                 self.id, self.score, self.hash.to_usize().unwrap(),
+                 self.total.load(AOrdering::Relaxed),
+                 self.count.load(AOrdering::Relaxed))
+    }
+}
 /*
-impl<I> fmt::Debug for CollisionMap<I> where I : Int {
+impl<I> fmt::Debug for CollisionMap<I> where I : PrimInt {
     fn fmt(&self, f : &mut fmt::Formatter)  -> Result<(), fmt::Error> {
         try!(writeln!(f, "CV [ mask: {:b}", self.mask.to_u64().unwrap()));
         try!(writeln!(f, "Vecs ["));

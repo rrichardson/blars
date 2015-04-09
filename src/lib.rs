@@ -1,11 +1,7 @@
-#![feature(unicode)]
-#![feature(core)]
-#![feature(convert)]
-#![feature(step_by)]
-
+#![feature(core, convert)]
 extern crate xxhash;
 extern crate rand;
-extern crate unicode;
+extern crate num;
 
 pub mod util;
 pub mod cmap;

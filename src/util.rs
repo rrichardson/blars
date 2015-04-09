@@ -1,14 +1,13 @@
 use std::vec::Vec;
-use std::iter::AdditiveIterator;
-use std::iter::repeat;
-use std::num::Float;
+use std::iter::{ repeat, Iterator, Map};
 use std::collections::hash_map::{HashMap, Entry};
 use xxhash::hash;
 use rand::{StdRng, Rng, SeedableRng};
 use rand::distributions::normal::StandardNormal;
 use std::string::{String};
 use std::iter::MinMaxResult::{MinMax};
-use std::num::Int;
+use num::PrimInt;
+
 /// the maximum number of bits allowable in a utf16 char
 static MAX_WIDTH : usize = 8;
 ///
@@ -34,7 +33,7 @@ pub fn moving_average(vals: &[usize], window: usize, ) -> Vec<f64> {
 }
 
 fn magnitude(vals: &[f64]) -> f64 {
-    let t = vals.iter().map(|x| x * x).sum();
+    let t : f64 = vals.iter().map(|x| x * x).sum();
     t.sqrt()
 }
 
@@ -157,7 +156,7 @@ pub fn score_codon(counts: &HashMap<Vec<u8>, usize>,
 }
 
 #[inline]
-pub fn slice_to_int<I : Int>(s : &[u8]) -> Option<I> {
+pub fn slice_to_int<I : PrimInt>(s : &[u8]) -> Option<I> {
     use std::raw::Slice;
     use std::mem;
     if s.len() < mem::size_of::<I>() { return None }
