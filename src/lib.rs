@@ -1,5 +1,7 @@
 #![feature(unicode)]
 #![feature(core)]
+#![feature(convert)]
+#![feature(step_by)]
 
 extern crate xxhash;
 extern crate rand;

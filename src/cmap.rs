@@ -8,12 +8,14 @@ use std::intrinsics::{ctpop8, ctpop16, ctpop32, ctpop64};
 use rand::{StdRng, Rng, SeedableRng};
 use std::mem;
 use std::fmt;
-use std::cmp::{Ord, PartialOrd, Ordering };
+use std::cmp::{Ord, PartialOrd};
+use std::cmp::Ordering as COrdering;
+use std::sync::atomic::{AtomicUsize};
+use std::sync::atomic::Ordering as AOrdering;
 
 /// Collision map
 /// Specialized structure which holds lists of candidate close items
 ///
-
 
 #[derive(Debug)]
 pub struct CollisionMap<I : Int + fmt::Debug> {
@@ -67,11 +69,16 @@ impl<I> CollisionMap<I> where I : Int + fmt::Debug {
 }
 
 #[derive(Debug)]
-pub struct Entry (pub u64, pub f64);
+pub struct Entry {
+    pub id : u64,
+    pub score : f64,
+    pub total : AtomicUsize,
+    pub count : AtomicUsize
+}
 
 impl PartialEq for Entry {
     fn eq(&self,  other: &Entry) -> bool {
-        self.1 == other.1
+        self.score == other.score
     }
 }
 
@@ -79,19 +86,19 @@ impl Eq for Entry {
 }
 
 impl PartialOrd for Entry {
-    fn partial_cmp(&self, other: &Entry) -> Option<Ordering> {
-        if self.1 > other.1 {
-            Some(Ordering::Greater)
-        } else if self.1 < other.1 {
-            Some(Ordering::Less)
+    fn partial_cmp(&self, other: &Entry) -> Option<COrdering> {
+        if self.score > other.score {
+            Some(COrdering::Greater)
+        } else if self.score < other.score {
+            Some(COrdering::Less)
         } else {
-            Some(Ordering::Equal)
+            Some(COrdering::Equal)
         }
     }
 }
 
 impl Ord for Entry {
-    fn cmp(&self, other: &Entry) -> Ordering {
+    fn cmp(&self, other: &Entry) -> COrdering {
         self.partial_cmp(other).unwrap()
     }
 }

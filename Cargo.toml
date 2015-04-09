@@ -27,10 +27,12 @@ name = "blars"
 
 [dependencies]
 rand = "*"
+num = "*"
+eventual = "*"
 
 [dependencies.xxhash]
 
 git = "https://github.com/rrichardson/rust-xxhash"
 
-[dependencies.streaming-stats]
-git = "git://github.com/BurntSushi/rust-stats"
+#[dependencies.streaming-stats]
+#git = "git://github.com/BurntSushi/rust-stats"

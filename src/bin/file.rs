@@ -1,3 +1,5 @@
+#![feature(step_by)]
+
 extern crate blars;
 extern crate stats;
 
@@ -9,7 +11,7 @@ use blars::util::*;
 use stats::OnlineStats;
 use blars::cmap::{ CollisionMap, Entry };
 use std::collections::{BinaryHeap};
-
+use std::path::Path;
 
 const FEATURE_WIDTH : usize = 24;
 const ALPHABET_WIDTH : usize = 8;
@@ -22,7 +24,8 @@ const KEY_SIZE : usize = 4;
 fn main() {
     let mut args = env::args();
     args.next();
-    let inpath = Path::new(args.next().unwrap());
+    let datafile = args.next().unwrap();
+    let inpath = Path::new(&datafile);
     println!("inpath={:?}", inpath);
     let seed : usize= args.next().unwrap().parse().unwrap();
     let scores = Path::new("scores.log");
